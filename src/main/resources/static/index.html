@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Paginated Data</title>
+    <style>
+        /* Global Styles */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #F4F4F4;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        h2 {
+            margin-top: 20px;
+            font-size: 28px;
+            color: #333;
+        }
+        /* Limit Control */
+        .limit-control {
+            margin: 15px auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+        .limit-control button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .limit-control button:hover {
+            background-color: #0056B3;
+        }
+        .limit-control input {
+            width: 50px;
+            font-size: 16px;
+            text-align: center;
+            padding: 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        /* Data Grid */
+        #dataContainer {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 10px;
+            background: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        .data-item {
+            background: #007BFF;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+            text-align: center;
+            transition: 0.3s;
+            cursor: pointer;
+            position: relative;
+        }
+        .data-item:hover {
+            background: #0056B3;
+            transform: scale(1.05);
+        }
+        /* Tooltip (Hidden by Default) */
+        .data-item .details {
+            display: none;
+            position: absolute;
+            bottom: 120%; /* Make tooltip appear above instead of below */
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 12px;
+            width: 200px;
+            white-space: nowrap;
+            text-align: left;
+            box-shadow: 0px 5px 10px rgba(0, 0, 0, 0.2);
+            pointer-events: none; /* Prevent blocking other elements */
+            z-index: 10;
+        }
+        /* Show Tooltip on Hover */
+        .data-item:hover .details {
+            display: block;
+        }
+        /* Pagination Buttons */
+        .pagination-nav {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .pagination-nav button {
+            background-color: #28A745;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .pagination-nav button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .pagination-nav button:hover:not(:disabled) {
+            background-color: #218838;
+        }
+        /* Smooth Transitions */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <h2>Enhanced Paginated Data</h2>
+    <div class="limit-control">
+        <button onclick="adjustLimit(-5)">-5</button>
+        <input type="number" id="pageLimit" value="25" min="5" max="50">
+        <button onclick="adjustLimit(5)">+5</button>
+    </div>
+    <div id="dataContainer" class="fade-in"></div>
+    <div class="pagination-nav">
+        <button onclick="loadPrevious()" id="prevBtn" disabled>Previous</button>
+        <button onclick="loadNext()" id="nextBtn">Next</button>
+    </div>
+    <script>
+        let currentAnchor = 0;
+        let currentLimit = 25;
+        let anchorStack = [0];
+        async function loadData(anchor, limit, direction) {
+            try {
+                const response = await fetch(`/api/entities?anchorId=${anchor}&limit=${limit}`);
+                const data = await response.json();
+                document.getElementById('dataContainer').innerHTML =
+                    data.data.map(item => `
+                        <div class="data-item fade-in">
+                            ${item.name}
+                            <div class="details">
+                                <strong>ID:</strong> ${item.id} <br>
+                                <strong>Created At:</strong> ${item.createdAt || 'N/A'} <br>
+                                <strong>Payload:</strong> ${item.payload || 'N/A'}
+                            </div>
+                        </div>
+                    `).join('');
+                if (direction === 'next') {
+                    anchorStack.push(currentAnchor);
+                    currentAnchor = data.nextAnchor || 0;
+                } else if (direction === 'prev') {
+                    anchorStack.pop();
+                    currentAnchor = anchorStack[anchorStack.length - 1] || 0;
+                }
+                document.getElementById('nextBtn').disabled = !data.nextAnchor;
+                document.getElementById('prevBtn').disabled = anchorStack.length <= 1;
+            } catch (error) {
+                console.error("Error fetching data:", error);
+            }
+        }
+        function adjustLimit(change) {
+            currentLimit = Math.max(5, Math.min(50, currentLimit + change));
+            document.getElementById('pageLimit').value = currentLimit;
+            loadData(currentAnchor, currentLimit, 'current');
+        }
+        function loadNext() {
+            loadData(currentAnchor, currentLimit, 'next');
+        }
+        function loadPrevious() {
+            loadData(currentAnchor, currentLimit, 'prev');
+        }
+        // Initial load
+        loadData(0, 25, 'init');
+    </script>
+</body>
+</html>
