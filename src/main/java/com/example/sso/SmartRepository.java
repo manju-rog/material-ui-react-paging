@@ -7,14 +7,20 @@ import java.util.List;
 
 public interface SmartRepository extends JpaRepository<SmartEntity, Long> {
 
-	@Query(value = "SELECT * FROM smart_entities " +
-		       "WHERE id > :anchorId " +
-		       "AND (:name IS NULL OR :name = '' OR LOWER(name) LIKE LOWER('%' || :name || '%')) " +
-		       "ORDER BY id ASC " +
-		       "FETCH FIRST :limit ROWS ONLY",
-		       nativeQuery = true)
-		List<SmartEntity> findOptimizedResults(
-		    @Param("anchorId") long anchorId,
-		    @Param("limit") int limit,
-		    @Param("name") String name);
+    @Query(value = "SELECT * FROM smart_entities " +
+                   "WHERE id > :anchorId " +
+                   "AND (:name IS NULL OR :name = '' OR LOWER(name) LIKE LOWER('%' || :name || '%')) " +
+                   "ORDER BY id ASC " +
+                   "FETCH FIRST :limit ROWS ONLY",
+                   nativeQuery = true)
+    List<SmartEntity> findOptimizedResults(
+        @Param("anchorId") long anchorId,
+        @Param("limit") int limit,
+        @Param("name") String name);
+        
+    // <-- ADDED: count query to get total records (with optional filtering)
+    @Query(value = "SELECT COUNT(*) FROM smart_entities " +
+                   "WHERE (:name IS NULL OR :name = '' OR LOWER(name) LIKE LOWER('%' || :name || '%'))",
+                   nativeQuery = true)
+    long countByName(@Param("name") String name);
 }
