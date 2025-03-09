@@ -9,9 +9,8 @@ import {
   TableRow,
   Paper,
   TablePagination,
-  IconButton,
+  Button,
 } from "@mui/material";
-import { KeyboardArrowLeft, KeyboardArrowRight } from "@mui/icons-material";
 
 const PaginatedData = () => {
   const [data, setData] = useState([]);
@@ -19,7 +18,7 @@ const PaginatedData = () => {
   const [limit, setLimit] = useState(25);
   const [nextAnchor, setNextAnchor] = useState(null);
   const [anchorStack, setAnchorStack] = useState([0]);
-  const [page, setPage] = useState(0);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   useEffect(() => {
     // Initial data load with anchor 0
@@ -27,6 +26,7 @@ const PaginatedData = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // This function fetches data given an anchor, limit, and navigation direction.
   const fetchData = async (anchor, limit, direction) => {
     try {
       const response = await axios.get(
@@ -34,20 +34,19 @@ const PaginatedData = () => {
       );
       const result = response.data;
       setData(result.data || []);
+      setTotalRecords(result.totalRecords || 0);
 
       if (direction === "next") {
-        // Save the current anchor to allow going back later
-        setAnchorStack((prev) => [...prev, currentAnchor]);
+        // For "next", push the anchor used for this call onto the stack
+        setAnchorStack(prev => [...prev, anchor]);
+        // Update currentAnchor to the new nextAnchor returned by the API
         setCurrentAnchor(result.nextAnchor || 0);
-        setPage((prev) => prev + 1);
       } else if (direction === "prev") {
-        // Remove the last anchor from the stack and use the previous value
-        const newStack = [...anchorStack];
-        newStack.pop();
-        const newAnchor = newStack[newStack.length - 1] || 0;
-        setAnchorStack(newStack);
-        setCurrentAnchor(newAnchor);
-        setPage((prev) => prev - 1);
+        // For "prev", we already update the anchor stack in the handler.
+        setCurrentAnchor(anchor);
+      } else if (direction === "init") {
+        // Initial load: set currentAnchor from the API result
+        setCurrentAnchor(result.nextAnchor || 0);
       }
       setNextAnchor(result.nextAnchor || null);
     } catch (error) {
@@ -55,14 +54,21 @@ const PaginatedData = () => {
     }
   };
 
-  const handleChangePage = (event, newPage) => {
-    if (newPage > page) {
-      // Move to next page only if there is a valid next anchor
-      if (nextAnchor) {
-        fetchData(currentAnchor, limit, "next");
-      }
-    } else if (newPage < page) {
-      fetchData(currentAnchor, limit, "prev");
+  // "Next" simply calls fetchData with the current anchor.
+  const handleNext = () => {
+    if (nextAnchor) {
+      fetchData(currentAnchor, limit, "next");
+    }
+  };
+
+  // "Previous" now pops the last anchor off the stack and uses the new last value.
+  const handlePrevious = () => {
+    if (anchorStack.length > 1) {
+      const newStack = [...anchorStack];
+      newStack.pop(); // remove the current page's anchor
+      const previousAnchor = newStack[newStack.length - 1] || 0;
+      setAnchorStack(newStack);
+      fetchData(previousAnchor, limit, "prev");
     }
   };
 
@@ -72,13 +78,8 @@ const PaginatedData = () => {
     // Reset pagination when limit changes
     setAnchorStack([0]);
     setCurrentAnchor(0);
-    setPage(0);
     fetchData(0, newLimit, "init");
   };
-
-  // For TablePagination, we compute a dummy count.
-  // This is only for display since the total count is unknown.
-  const count = page * limit + data.length + (nextAnchor ? 1 : 0);
 
   return (
     <Paper sx={{ width: "100%", overflow: "hidden" }}>
@@ -104,55 +105,39 @@ const PaginatedData = () => {
           </TableBody>
         </Table>
       </TableContainer>
-      <TablePagination
-        component="div"
-        count={count}
-        page={page}
-        onPageChange={handleChangePage}
-        rowsPerPage={limit}
-        onRowsPerPageChange={handleChangeRowsPerPage}
-        rowsPerPageOptions={[5, 10, 25, 50]}
-        labelDisplayedRows={() => `Page ${page + 1}`}
-        ActionsComponent={(subprops) => (
-          <TablePaginationActions
-            {...subprops}
-            nextAnchor={nextAnchor}
-            anchorStack={anchorStack}
-          />
-        )}
-      />
+      
+      {/* Custom navigation buttons and updated pagination footer */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "0 16px",
+        }}
+      >
+        <div>
+          <Button onClick={handlePrevious} disabled={anchorStack.length <= 1}>
+            Previous
+          </Button>
+          <Button onClick={handleNext} disabled={!nextAnchor}>
+            Next
+          </Button>
+        </div>
+        <TablePagination
+          component="div"
+          count={totalRecords}
+          page={0} // dummy page number since we're using anchor-based navigation
+          onPageChange={() => {}}
+          rowsPerPage={limit}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={[5, 10, 25, 50]}
+          // UPDATED: simplified label (removed anchor info)
+          labelDisplayedRows={() =>
+            `Showing ${data.length} records of ${totalRecords}`
+          }
+        />
+      </div>
     </Paper>
-  );
-};
-
-const TablePaginationActions = (props) => {
-  const { page, onPageChange, nextAnchor, anchorStack } = props;
-
-  const handleBackButtonClick = (event) => {
-    onPageChange(event, page - 1);
-  };
-
-  const handleNextButtonClick = (event) => {
-    onPageChange(event, page + 1);
-  };
-
-  return (
-    <div style={{ flexShrink: 0, marginLeft: 8 }}>
-      <IconButton
-        onClick={handleBackButtonClick}
-        disabled={anchorStack.length <= 1}
-        aria-label="previous page"
-      >
-        <KeyboardArrowLeft />
-      </IconButton>
-      <IconButton
-        onClick={handleNextButtonClick}
-        disabled={!nextAnchor}
-        aria-label="next page"
-      >
-        <KeyboardArrowRight />
-      </IconButton>
-    </div>
   );
 };
 
